@@ -1,6 +1,6 @@
 # tele-post-formatter
 
-Formats text for Twitter, Bluesky, and Instagram. Detects names with spaCy, looks up handles via Bluesky API and Google (Serper), and splits long posts correctly per platform.
+A Telegram bot that formats text for Twitter, Bluesky, and Instagram. Detects names with spaCy, looks up handles via Bluesky API and Google (Serper), and splits long posts correctly per platform.
 
 ## Setup
 
