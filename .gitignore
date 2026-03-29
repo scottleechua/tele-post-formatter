@@ -1,0 +1,21 @@
+.DS_Store
+
+# Config
+config.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Env
+.env
+
+# Virtual environment
+venv/
+.venv/
+
+# Logs
+*.log
+
+# Claude
+.claude
