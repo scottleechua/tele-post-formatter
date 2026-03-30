@@ -16,5 +16,6 @@
   },
   "ignored_names": [],
   "allowed_users": [],
-  "auto_paragraph": false
+  "auto_paragraph": false,
+  "auto_emoji": false
 }

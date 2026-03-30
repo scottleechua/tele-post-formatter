@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import warnings
+import anthropic
 from urllib.parse import urlparse
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions
 from telegram.ext import (
@@ -103,6 +104,27 @@ PLATFORM_EMOJI = {
 }
 
 
+async def _add_paragraph_emojis(text: str) -> str:
+    """Prepend a single apt emoji to each paragraph using Claude."""
+    paragraphs = text.split("\n\n")
+    numbered = "\n\n".join(f"[{i+1}] {p}" for i, p in enumerate(paragraphs))
+    prompt = (
+        "I have a text split into paragraphs, each prefixed with [N]. "
+        "For each paragraph, prepend a single most apt emoji that captures its theme. "
+        "Return only the paragraphs in the same order, each starting with the emoji "
+        "followed by a space and the original paragraph text, separated by double newlines. "
+        "Do not include the [N] prefix or any other text.\n\n"
+        + numbered
+    )
+    client = anthropic.AsyncAnthropic()
+    response = await client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=4096,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text.strip()
+
+
 async def send_formatted_output(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("editing_handle", None)
     text = context.user_data["original_text"]
@@ -111,6 +133,8 @@ async def send_formatted_output(update: Update, context: ContextTypes.DEFAULT_TY
 
     if config.get("auto_paragraph", False):
         text = reflow_paragraphs(text)
+        if config.get("auto_emoji", False):
+            text = await _add_paragraph_emojis(text)
 
     platform_texts = apply_substitutions(text, substitutions)
 
@@ -577,7 +601,7 @@ PLATFORM_SETUP = [
 ]
 
 
-def _build_platforms_keyboard(enabled_map: dict, auto_paragraph: bool) -> InlineKeyboardMarkup:
+def _build_platforms_keyboard(enabled_map: dict, auto_paragraph: bool, auto_emoji: bool = False) -> InlineKeyboardMarkup:
     rows = []
     for platform, label in PLATFORM_SETUP:
         mark = "✅" if enabled_map[platform] else "❌"
@@ -587,6 +611,9 @@ def _build_platforms_keyboard(enabled_map: dict, auto_paragraph: bool) -> Inline
         )])
     ap_mark = "✅" if auto_paragraph else "❌"
     rows.append([InlineKeyboardButton(f"{ap_mark} Auto-paragraph", callback_data="setup:toggle_ap")])
+    if auto_paragraph:
+        ae_mark = "✅" if auto_emoji else "❌"
+        rows.append([InlineKeyboardButton(f"{ae_mark} Auto-emoji", callback_data="setup:toggle_ae")])
     any_enabled = any(enabled_map.values())
     if any_enabled:
         rows.append([InlineKeyboardButton("Next →", callback_data="setup:next")])
@@ -610,6 +637,7 @@ def _seed_setup_data(context: ContextTypes.DEFAULT_TYPE):
         for p, _ in PLATFORM_SETUP
     }
     context.user_data["setup_auto_paragraph"] = cfg.get("auto_paragraph", False)
+    context.user_data["setup_auto_emoji"] = cfg.get("auto_emoji", False)
     context.user_data["setup_steps"] = []
     context.user_data["setup_index"] = 0
     context.user_data["setup_pending"] = {}
@@ -618,7 +646,8 @@ def _seed_setup_data(context: ContextTypes.DEFAULT_TYPE):
 async def _show_platforms_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     enabled_map = context.user_data["setup_platform_enabled"]
     auto_paragraph = context.user_data.get("setup_auto_paragraph", False)
-    keyboard = _build_platforms_keyboard(enabled_map, auto_paragraph)
+    auto_emoji = context.user_data.get("setup_auto_emoji", False)
+    keyboard = _build_platforms_keyboard(enabled_map, auto_paragraph, auto_emoji)
     await update.message.reply_text(
         "Which platforms are you posting to? Tap to toggle, then press Next.",
         reply_markup=keyboard,
@@ -649,11 +678,26 @@ async def setup_platforms_callback(update: Update, context: ContextTypes.DEFAULT
     data = query.data
 
     if data == "setup:toggle_ap":
-        context.user_data["setup_auto_paragraph"] = not context.user_data.get("setup_auto_paragraph", False)
+        new_ap = not context.user_data.get("setup_auto_paragraph", False)
+        context.user_data["setup_auto_paragraph"] = new_ap
+        if not new_ap:
+            context.user_data["setup_auto_emoji"] = False
         await query.edit_message_reply_markup(
             reply_markup=_build_platforms_keyboard(
                 context.user_data["setup_platform_enabled"],
                 context.user_data["setup_auto_paragraph"],
+                context.user_data.get("setup_auto_emoji", False),
+            )
+        )
+        return SETUP_PLATFORMS
+
+    if data == "setup:toggle_ae":
+        context.user_data["setup_auto_emoji"] = not context.user_data.get("setup_auto_emoji", False)
+        await query.edit_message_reply_markup(
+            reply_markup=_build_platforms_keyboard(
+                context.user_data["setup_platform_enabled"],
+                context.user_data.get("setup_auto_paragraph", False),
+                context.user_data["setup_auto_emoji"],
             )
         )
         return SETUP_PLATFORMS
@@ -663,7 +707,11 @@ async def setup_platforms_callback(update: Update, context: ContextTypes.DEFAULT
         enabled_map = context.user_data["setup_platform_enabled"]
         enabled_map[platform] = not enabled_map[platform]
         await query.edit_message_reply_markup(
-            reply_markup=_build_platforms_keyboard(enabled_map, context.user_data.get("setup_auto_paragraph", False))
+            reply_markup=_build_platforms_keyboard(
+                enabled_map,
+                context.user_data.get("setup_auto_paragraph", False),
+                context.user_data.get("setup_auto_emoji", False),
+            )
         )
         return SETUP_PLATFORMS
 
@@ -805,7 +853,7 @@ async def setup_field_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await _show_field_step(update, context)
 
 
-def _build_confirm_message(enabled_map: dict, pending: dict, auto_paragraph: bool) -> str:
+def _build_confirm_message(enabled_map: dict, pending: dict, auto_paragraph: bool, auto_emoji: bool = False) -> str:
     lines = ["<b>Ready to save:</b>\n"]
     for platform, label in PLATFORM_SETUP:
         enabled = enabled_map[platform]
@@ -823,6 +871,9 @@ def _build_confirm_message(enabled_map: dict, pending: dict, auto_paragraph: boo
     lines.append(f"\n🚫 Ignored names: <code>{_esc(', '.join(ignored) or '(none)')}</code>")
     ap_mark = "✅" if auto_paragraph else "❌"
     lines.append(f"📐 Auto-paragraph: {ap_mark}")
+    if auto_paragraph:
+        ae_mark = "✅" if auto_emoji else "❌"
+        lines.append(f"😀 Auto-emoji: {ae_mark}")
     return "\n".join(lines)
 
 
@@ -830,7 +881,8 @@ async def _show_confirm_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
     enabled_map = context.user_data["setup_platform_enabled"]
     pending = context.user_data["setup_pending"]
     auto_paragraph = context.user_data.get("setup_auto_paragraph", False)
-    text = _build_confirm_message(enabled_map, pending, auto_paragraph)
+    auto_emoji = context.user_data.get("setup_auto_emoji", False)
+    text = _build_confirm_message(enabled_map, pending, auto_paragraph, auto_emoji)
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton("💾 Save", callback_data="setup:save"),
     ]])
@@ -852,6 +904,7 @@ async def setup_confirm_callback(update: Update, context: ContextTypes.DEFAULT_T
     pending = context.user_data["setup_pending"]
 
     cfg["auto_paragraph"] = context.user_data.get("setup_auto_paragraph", False)
+    cfg["auto_emoji"] = context.user_data.get("setup_auto_emoji", False)
 
     for platform, _ in PLATFORM_SETUP:
         cfg.setdefault(platform, {})["enabled"] = enabled_map[platform]
