@@ -14,11 +14,14 @@ Talk to [@userinfobot](https://t.me/userinfobot) to get your numeric user ID.
 ### 3. Get a Serper API key
 Sign up at [serper.dev](https://serper.dev) and copy your API key.
 
-### 4. Local development
+### 4. (Optional) Get an Anthropic API key
+Required only if you enable `auto_emoji`. Sign up at [console.anthropic.com](https://console.anthropic.com).
+
+### 5. Local development
 
 ```bash
 cp .env.example .env
-# fill in TELEGRAM_BOT_TOKEN, ADMIN_USER_ID, and SERPER_API_KEY in .env
+# fill in TELEGRAM_BOT_TOKEN, ADMIN_USER_ID, SERPER_API_KEY, and optionally ANTHROPIC_API_KEY
 
 uv sync
 uv run python -m spacy download en_core_web_md
@@ -27,7 +30,7 @@ uv run --env-file .env python bot.py
 
 `config.json` will be created automatically in the project root on first run.
 
-### 5. Deploy to Railway
+### 6. Deploy to Railway
 
 1. Push this repo to GitHub and create a new Railway project from the repo
 2. Add a **Volume** in Railway, mounted at `/data`
@@ -35,6 +38,7 @@ uv run --env-file .env python bot.py
    - `TELEGRAM_BOT_TOKEN`
    - `ADMIN_USER_ID`
    - `SERPER_API_KEY`
+   - `ANTHROPIC_API_KEY` (optional, for auto-emoji)
    - `DATA_DIR` → `/data`
 4. Deploy.
 
@@ -42,22 +46,18 @@ Railway will build the Docker image, install dependencies, and download the spaC
 
 ## Usage
 
-- **Send any text** → bot detects names, looks up handles, asks you to confirm, then sends formatted output
-- **/config** → edit prefixes, suffixes, and ignored names per platform
+- **Send any text** → bot detects names, lets you select which to look up, finds handles, asks you to confirm, then sends formatted output
+- **/start** → run the setup wizard (platforms, prefixes, suffixes, ignored names)
+- **/config** → same as /start, for updating settings
+- **/users** → (admin only) manage which Telegram users can access the bot
 - **/cancel** → abort current operation
 
-## Config (`config.json`)
+Editable via `/start` or `/config` in Telegram.
 
-```json
-{
-  "twitter":   { "prefix": "", "suffix": "" },
-  "bluesky":   { "prefix": "", "suffix": "" },
-  "instagram": { "prefix": "", "suffix": "" },
-  "ignored_names": ["OpenAI", "White House"]
-}
-```
-
-Editable via `/config` in Telegram — no need to touch the file directly.
+- **enabled**: toggle a platform on/off
+- **allowed_users**: Telegram user IDs permitted to use the bot (admin access only)
+- **auto_paragraph**: reflow text into paragraphs before formatting
+- **auto_emoji**: prepend an apt emoji to each paragraph using Claude (requires `ANTHROPIC_API_KEY`)
 
 ## Character limits
 
