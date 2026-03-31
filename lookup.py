@@ -50,8 +50,7 @@ async def search_serper(query: str) -> str | None:
             if results:
                 return results[0].get("link")
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 402:
-                raise SerperCreditsError("Serper API credits exhausted") from e
+            raise SerperCreditsError(f"Serper API error {e.response.status_code}") from e
         except Exception:
             pass
     return None
@@ -75,8 +74,7 @@ async def search_twitter(name: str) -> str | None:
                 if len(parts) == 1 and not parts[0].startswith(("#", "i", "search")):
                     return url
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 402:
-                raise SerperCreditsError("Serper API credits exhausted") from e
+            raise SerperCreditsError(f"Serper API error {e.response.status_code}") from e
         except Exception:
             pass
     return None
@@ -100,8 +98,7 @@ async def search_instagram(name: str) -> str | None:
                 if len(parts) == 1 and not parts[0].startswith(("p", "reel", "explore", "stories")):
                     return url
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 402:
-                raise SerperCreditsError("Serper API credits exhausted") from e
+            raise SerperCreditsError(f"Serper API error {e.response.status_code}") from e
         except Exception:
             pass
     return None

@@ -19,6 +19,7 @@ from formatter import apply_substitutions, format_platform
 warnings.filterwarnings("ignore", message="If 'per_message=False'", category=UserWarning)
 
 logging.basicConfig(level=logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 _data_dir = os.environ.get("DATA_DIR", os.path.dirname(__file__))
@@ -467,8 +468,8 @@ async def handle_manual_names_callback(update: Update, context: ContextTypes.DEF
         enabled_platforms = context.user_data.get("enabled_platforms", {"twitter", "bluesky", "instagram"})
         try:
             lookups = await asyncio.gather(*[lookup_all(n, enabled_platforms) for n in names])
-        except SerperCreditsError:
-            await query.edit_message_text("Serper API credits are exhausted — handle lookups unavailable.")
+        except SerperCreditsError as e:
+            await query.edit_message_text(f"Serper API error — handle lookups unavailable: {e}")
             return ConversationHandler.END
         context.user_data["lookups"] = list(lookups)
         context.user_data["current_name_idx"] = 0
