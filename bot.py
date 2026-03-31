@@ -18,7 +18,7 @@ from formatter import apply_substitutions, format_platform
 
 warnings.filterwarnings("ignore", message="If 'per_message=False'", category=UserWarning)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 _data_dir = os.environ.get("DATA_DIR", os.path.dirname(__file__))
