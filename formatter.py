@@ -74,13 +74,13 @@ def _take_chunk(text: str, max_chars: int) -> tuple[str, str]:
 
     # Prefer paragraph break
     idx = window.rfind("\n\n")
-    if idx > max_chars // 2:
+    if idx > max_chars * 17 // 20:
         return text[:idx], text[idx + 2:]
 
     # Try to break at sentence boundary
     for punct in (".", "!", "?"):
         idx = window.rfind(punct)
-        if idx > max_chars // 2:
+        if idx > max_chars * 17 // 20:
             return text[:idx + 1], text[idx + 1:]
 
     # Fall back to word boundary
